@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>UK Flight Supplement Calculator</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    h2 { color: #2a4d69; }
+    form { max-width: 650px; }
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+    .form-col {
+      flex: 1 1 320px;
+      min-width: 280px;
+      margin-right: 20px;
+      margin-bottom: 10px;
+    }
+    label { display: block; font-weight: bold; margin-bottom: 4px; }
+    select, input[type="text"], input[type="number"], input[type="date"] {
+      width: 100%; padding: 6px; margin-top: 2px;
+      box-sizing: border-box;
+    }
+    .result { margin-top: 25px; font-size: 1.2em; color: #1b7e1b; }
+    button { margin-top: 20px; padding: 10px 20px; }
+    .summary-table { margin-top: 20px; border-collapse: collapse; width: 100%; }
+    .summary-table th, .summary-table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    .summary-table th { background: #f5f5f5; }
+    .section-header { font-size: 1.1em; margin: 18px 0 8px 0; color: #2a4d69; font-weight: bold; }
+    @media (max-width: 700px) {
+      .form-row { flex-direction: column; }
+      .form-col { margin-right: 0; min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <h2>UK Flight Supplement Calculator</h2>
+  <form id="supplementForm" autocomplete="off">
+    <div class="section-header">Flight & Package Details</div>
+    <div class="form-row">
+      <div class="form-col">
+        <label for="flightClass">Flight Class</label>
+        <select id="flightClass" required>
+          <option value="Economy" selected>Economy</option>
+          <option value="Business">Business</option>
+        </select>
+      </div>
+      <div class="form-col">
+        <label for="pgCurrency">PG Selling Currency</label>
+        <select id="pgCurrency" required>
+          <option value="GBP" selected>GBP</option>
+          <option value="EUR">EUR</option>
+          <option value="NOK">NOK</option>
+          <option value="USD">USD</option>
+          <option value="AUD">AUD</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-header">Route & Dates</div>
+    <div class="form-row">
+      <div class="form-col">
+        <label for="origin">Origin</label>
+        <select id="origin" required></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-col">
+        <label for="destination">Travel to Destination</label>
+        <select id="destination" required></select>
+      </div>
+      <div class="form-col">
+        <label for="outboundDate">Travel Date (to Destination)</label>
+        <input type="date" id="outboundDate" required min="2025-04-01" max="2027-03-31">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-col">
+        <label for="returnOrigin">Return from Destination</label>
+        <select id="returnOrigin" required>
+          <option value="One-Way">One-Way</option>
+        </select>
+      </div>
+      <div class="form-col">
+        <label for="inboundDate">Return Date (from Destination)</label>
+        <input type="date" id="inboundDate" min="2025-04-01" max="2027-03-31">
+      </div>
+    </div>
+
+    <div class="section-header">Cost Inputs</div>
+    <div class="form-row">
+      <div class="form-col">
+        <label for="sabreCurrency">Sabre Cost Currency</label>
+        <select id="sabreCurrency" required>
+          <option value="GBP" selected>GBP</option>
+          <option value="EUR">EUR</option>
+          <option value="NOK">NOK</option>
+          <option value="USD">USD</option>
+          <option value="AUD">AUD</option>
+        </select>
+      </div>
+      <div class="form-col">
+        <label for="flightCost">Total Sabre Flight Cost (for both directions)</label>
+        <input type="number" id="flightCost" min="0" step="0.01" required>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-col">
+        <label for="altMaxCostCurrency">Alternative Max Cost Currency</label>
+        <select id="altMaxCostCurrency">
+          <option value="GBP" selected>GBP</option>
+          <option value="EUR">EUR</option>
+          <option value="NOK">NOK</option>
+          <option value="USD">USD</option>
+          <option value="AUD">AUD</option>
+        </select>
+      </div>
+      <div class="form-col">
+        <label for="altMaxCost">Alternative Max Cost (if lower, combined)</label>
+        <input type="number" id="altMaxCost" min="0" step="0.01" placeholder="Enter cost if lower">
+      </div>
+    </div>
+
+    <button type="button" onclick="calculateSupplement()">Calculate Supplement</button>
+  </form>
+  <div class="result" id="result"></div>
+  <div id="summaryTable"></div>
+  <div id="carrierTable" style="margin-top:30px;">
+    <h3>Interface with PG Table</h3>
+    <table style="border-collapse:collapse;width:100%;">
+      <thead>
+        <tr>
+          <th style="border:1px solid #ccc;padding:8px;">Validating Carrier of Flights</th>
+          <th style="border:1px solid #ccc;padding:8px;">Code</th>
+          <th style="border:1px solid #ccc;padding:8px;">Use Supplier in PG</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Air Europa</td><td style="border:1px solid #ccc;padding:8px;">UX</td><td style="border:1px solid #ccc;padding:8px;">Air Europa</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Air France</td><td style="border:1px solid #ccc;padding:8px;">AF</td><td style="border:1px solid #ccc;padding:8px;">AF - Air France</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Austrian Airlines</td><td style="border:1px solid #ccc;padding:8px;">OS</td><td style="border:1px solid #ccc;padding:8px;">Austrian Airlines</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">British Airways</td><td style="border:1px solid #ccc;padding:8px;">BA</td><td style="border:1px solid #ccc;padding:8px;">British Airways (UK)</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Brussels Airlines</td><td style="border:1px solid #ccc;padding:8px;">SN</td><td style="border:1px solid #ccc;padding:8px;">Brussels Airlines</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Iberia</td><td style="border:1px solid #ccc;padding:8px;">IB</td><td style="border:1px solid #ccc;padding:8px;">Iberia Airlines</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Icelandair</td><td style="border:1px solid #ccc;padding:8px;">FI</td><td style="border:1px solid #ccc;padding:8px;">Icelandair UK, US and Nordic</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">KLM</td><td style="border:1px solid #ccc;padding:8px;">KL</td><td style="border:1px solid #ccc;padding:8px;">KLM</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Loganair</td><td style="border:1px solid #ccc;padding:8px;">LM</td><td style="border:1px solid #ccc;padding:8px;">LOGANAIR</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Lufthansa</td><td style="border:1px solid #ccc;padding:8px;">LH</td><td style="border:1px solid #ccc;padding:8px;">LH Lufthansa</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Norwegian Air</td><td style="border:1px solid #ccc;padding:8px;">DY</td><td style="border:1px solid #ccc;padding:8px;">Norwegian Air Shuttle</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">SAS</td><td style="border:1px solid #ccc;padding:8px;">SK</td><td style="border:1px solid #ccc;padding:8px;">SAS</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">TAP Air Portugal</td><td style="border:1px solid #ccc;padding:8px;">TP</td><td style="border:1px solid #ccc;padding:8px;">TAP Air Portugal</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:8px;">Widerøe</td><td style="border:1px solid #ccc;padding:8px;">WF</td><td style="border:1px solid #ccc;padding:8px;">Widerøes Flyveselskap ASA</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <script>
+    const settings = {
+      Economy: { markup: 1.0, minSupp: 20 },
+      Business: { markup: 1.176471, minSupp: 20 }
+    };
+
+    const exchangeRates = {
+      '2526': {
+        "NOK-NOK": 1, "NOK-EUR": 0.1, "NOK-GBP": 0.084, "NOK-SEK": 1.0989, "NOK-USD": 0.1176, "NOK-DKK": 0.7519, "NOK-CAD": 0.1449, "NOK-AUD": 0.155, "NOK-CHF": 0.102,
+        "EUR-NOK": 10, "EUR-EUR": 1, "EUR-GBP": 0.8403, "EUR-SEK": 10.989, "EUR-USD": 1.1765, "EUR-DKK": 7.5188, "EUR-CAD": 1.4493, "EUR-AUD": 1.5504, "EUR-CHF": 1.0204,
+        "GBP-NOK": 11.9, "GBP-EUR": 1.19, "GBP-GBP": 1, "GBP-SEK": 13.0719, "GBP-USD": 1.4, "GBP-DKK": 8.9445, "GBP-CAD": 1.7247, "GBP-AUD": 1.845, "GBP-CHF": 1.2143,
+        "SEK-NOK": 0.91, "SEK-EUR": 0.091, "SEK-GBP": 0.0765, "SEK-SEK": 1, "SEK-USD": 0.1071, "SEK-DKK": 0.6842, "SEK-CAD": 0.1319, "SEK-AUD": 0.1411, "SEK-CHF": 0.0929,
+        "USD-NOK": 8.5, "USD-EUR": 0.85, "USD-GBP": 0.7143, "USD-SEK": 9.3407, "USD-USD": 1, "USD-DKK": 6.3898, "USD-CAD": 1.2318, "USD-AUD": 1.3179, "USD-CHF": 0.8674,
+        "DKK-NOK": 1.33, "DKK-EUR": 0.133, "DKK-GBP": 0.1118, "DKK-SEK": 1.4615, "DKK-USD": 0.1565, "DKK-DKK": 1, "DKK-CAD": 0.1928, "DKK-AUD": 0.2062, "DKK-CHF": 0.1357,
+        "CAD-NOK": 6.9, "CAD-EUR": 0.69, "CAD-GBP": 0.5798, "CAD-SEK": 7.5824, "CAD-USD": 0.8118, "CAD-DKK": 5.188, "CAD-CAD": 1, "CAD-AUD": 1.0697, "CAD-CHF": 0.7041,
+        "AUD-NOK": 6.45, "AUD-EUR": 0.645, "AUD-GBP": 0.542, "AUD-SEK": 7.0879, "AUD-USD": 0.7588, "AUD-DKK": 4.8496, "AUD-CAD": 0.9348, "AUD-AUD": 1, "AUD-CHF": 0.6582,
+        "CHF-NOK": 9.8, "CHF-EUR": 0.98, "CHF-GBP": 0.8235, "CHF-SEK": 10.7692, "CHF-USD": 1.1529, "CHF-DKK": 7.3684, "CHF-CAD": 1.4203, "CHF-AUD": 1.5194, "CHF-CHF": 1
+      },
+      '2627': {
+        "NOK-NOK": 1, "NOK-EUR": 0.0867, "NOK-GBP": 0.0747, "NOK-SEK": 0.9865, "NOK-USD": 0.0938, "NOK-DKK": 0.6469, "NOK-CAD": 0.1271, "NOK-AUD": 0.1433, "NOK-CHF": 0.0826,
+        "EUR-NOK": 11.5288, "EUR-EUR": 1, "EUR-GBP": 0.8613, "EUR-SEK": 11.3766, "EUR-USD": 1.0821, "EUR-DKK": 7.4627, "EUR-CAD": 1.4654, "EUR-AUD": 1.6515, "EUR-CHF": 0.9524,
+        "GBP-NOK": 13.3865, "GBP-EUR": 1.161, "GBP-GBP": 1, "GBP-SEK": 13.21, "GBP-USD": 1.2568, "GBP-DKK": 8.6655, "GBP-CAD": 1.7018, "GBP-AUD": 1.9183, "GBP-CHF": 1.1053,
+        "SEK-NOK": 1.0137, "SEK-EUR": 0.0879, "SEK-GBP": 0.0757, "SEK-SEK": 1, "SEK-USD": 0.0952, "SEK-DKK": 0.6563, "SEK-CAD": 0.1289, "SEK-AUD": 0.1454, "SEK-CHF": 0.0838,
+        "USD-NOK": 10.6564, "USD-EUR": 0.9241, "USD-GBP": 0.7957, "USD-SEK": 10.504, "USD-USD": 1, "USD-DKK": 6.8918, "USD-CAD": 1.3541, "USD-AUD": 1.5263, "USD-CHF": 0.8794,
+        "DKK-NOK": 1.5458, "DKK-EUR": 0.134, "DKK-GBP": 0.1154, "DKK-SEK": 1.5236, "DKK-USD": 0.1451, "DKK-DKK": 1, "DKK-CAD": 0.1965, "DKK-AUD": 0.2215, "DKK-CHF": 0.1276,
+        "CAD-NOK": 7.8683, "CAD-EUR": 0.6824, "CAD-GBP": 0.5876, "CAD-SEK": 7.7557, "CAD-USD": 0.7385, "CAD-DKK": 5.0886, "CAD-CAD": 1, "CAD-AUD": 1.1275, "CAD-CHF": 0.6497,
+        "AUD-NOK": 6.98, "AUD-EUR": 0.6055, "AUD-GBP": 0.5213, "AUD-SEK": 6.8798, "AUD-USD": 0.6552, "AUD-DKK": 4.5144, "AUD-CAD": 0.8869, "AUD-AUD": 1, "AUD-CHF": 0.5765,
+        "CHF-NOK": 12.1123, "CHF-EUR": 1.05, "CHF-GBP": 0.9047, "CHF-SEK": 11.9389, "CHF-USD": 1.1371, "CHF-DKK": 7.8341, "CHF-CAD": 1.5391, "CHF-AUD": 1.7347, "CHF-CHF": 1
+      }
+    };
+
+    const maxCostTable = {
+      '2526': {
+        'BGO': { main: 180, regional: 60 },
+        'HAM': { main: 200, regional: 0 },
+        'HEL': { main: 210, regional: 60 },
+        'KKN': { main: 245, regional: 60 },
+        'LYR': { main: 370, regional: 60 },
+        'OSL': { main: 200, regional: 60 },
+        'ARN': { main: 180, regional: 60 },
+        'TOS': { main: 245, regional: 60 },
+        'TRD': { main: 235, regional: 60 }
+      },
+      '2627': {
+        'BGO_LOW': { main: 150, regional: 60 },
+        'BGO_HIGH': { main: 170, regional: 60 },
+        'HAM': { main: 210, regional: 0 },
+        'HEL': { main: 230, regional: 60 },
+        'KKN': { main: 230, regional: 60 },
+        'LYR': { main: 390, regional: 60 },
+        'OSL': { main: 170, regional: 60 },
+        'ARN': { main: 190, regional: 60 },
+        'TOS': { main: 230, regional: 60 },
+        'TRD': { main: 210, regional: 60 }
+      }
+    };
+
+    const destinations = [
+      "BGO - Bergen", "HAM - Hamburg", "HEL - Helsinki", "KKN - Kirkenes",
+      "LYR - Longyearbyen", "OSL - Oslo", "ARN - Stockholm", "TOS - Tromso", "TRD - Trondheim"
+    ];
+    const origins = [
+      "LHR - London Heathrow", "LGW - London Gatwick", "MAN - Manchester", "BHX - Birmingham",
+      "ABZ - Aberdeen", "EDI - Edinburgh", "GLA - Glasgow", "NCL - Newcastle", "LBA - Leeds",
+      "NWI - Norwich", "BRS - Bristol", "CWL - Cardiff", "HUY - Humberside", "MME - Durham Teeside",
+      "SOU - Southampton", "BHD - Belfast City", "INV - Inverness"
+    ];
+    const norwegianCities = [
+      "BGO - Bergen", "HAM - Hamburg", "HEL - Helsinki", "KKN - Kirkenes",
+      "LYR - Longyearbyen", "OSL - Oslo", "ARN - Stockholm", "TOS - Tromso", "TRD - Trondheim"
+    ];
+
+    function getSeason(dateStr) {
+      const date = new Date(dateStr);
+      if (date >= new Date('2026-04-01') && date < new Date('2027-04-01')) return '2627';
+      return '2526';
+    }
+    function getExchangeRate(season, from, to) {
+      if (from === to) return 1;
+      const key = from + '-' + to;
+      return (exchangeRates[season] && exchangeRates[season][key]) ? exchangeRates[season][key] : 1;
+    }
+    function getMaxCost(season, destCode, isRegional, travelDate) {
+      if (season === '2627' && destCode === 'BGO') {
+        const d = new Date(travelDate);
+        const isHigh = d.getMonth() >= 5 && d.getMonth() <= 7;
+        return maxCostTable[season][isHigh ? 'BGO_HIGH' : 'BGO_LOW'];
+      }
+      return maxCostTable[season][destCode];
+    }
+    function extractCode(str) {
+      return str.split(' - ')[0];
+    }
+    function isRegionalOrigin(origin) {
+      return !origin.startsWith('LHR') && !origin.startsWith('LGW');
+    }
+
+    function populateDropdown(id, options) {
+      const sel = document.getElementById(id);
+      sel.innerHTML = '<option value="">Select</option>';
+      options.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt; o.text = opt;
+        sel.add(o);
+      });
+    }
+    window.onload = function() {
+      populateDropdown('origin', origins);
+      populateDropdown('destination', destinations);
+      const returnSel = document.getElementById('returnOrigin');
+      returnSel.innerHTML = '<option value="One-Way">One-Way</option>';
+      norwegianCities.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o; opt.text = o;
+        returnSel.add(opt);
+      });
+      document.getElementById('pgCurrency').value = 'GBP';
+      document.getElementById('sabreCurrency').value = 'GBP';
+      document.getElementById('altMaxCostCurrency').value = 'GBP';
+    };
+
+    // Enforce mandatory return date if not One-Way
+    document.addEventListener('DOMContentLoaded', function() {
+      const returnOrigin = document.getElementById('returnOrigin');
+      const inboundDate = document.getElementById('inboundDate');
+      function toggleInboundRequired() {
+        if (returnOrigin.value !== "One-Way") {
+          inboundDate.required = true;
+        } else {
+          inboundDate.required = false;
+          inboundDate.value = "";
+        }
+      }
+      returnOrigin.addEventListener('change', toggleInboundRequired);
+      toggleInboundRequired();
+    });
+
+    function isDateInRange(dateStr) {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      const min = new Date('2025-04-01');
+      const max = new Date('2027-03-31');
+      return d >= min && d <= max;
+    }
+
+ 
+   // --- Supplement calculation logic as in previous version (with summary table) ---
+    function calculateSupplement() {
+      const flightClass = document.getElementById('flightClass').value;
+      const pgCurrency = document.getElementById('pgCurrency').value;
+      const origin = document.getElementById('origin').value;
+      const destination = document.getElementById('destination').value;
+      const outboundDate = document.getElementById('outboundDate').value;
+      const returnOrigin = document.getElementById('returnOrigin').value;
+      const inboundDate = document.getElementById('inboundDate').value;
+      const sabreCurrency = document.getElementById('sabreCurrency').value;
+      const flightCost = parseFloat(document.getElementById('flightCost').value);
+      const altMaxCost = parseFloat(document.getElementById('altMaxCost').value) || null;
+      const altMaxCostCurrency = document.getElementById('altMaxCostCurrency').value;
+
+      if (!flightClass || !pgCurrency || !origin || !destination || !outboundDate || !sabreCurrency || isNaN(flightCost)) {
+        document.getElementById('result').innerHTML = '<span style="color:red">Please fill in all required fields.</span>';
+        document.getElementById('summaryTable').innerHTML = '';
+        return;
+      }
+
+      if (!isDateInRange(outboundDate) || (returnOrigin !== "One-Way" && !isDateInRange(inboundDate))) {
+        document.getElementById('result').innerHTML = '<span style="color:red">Dates must be between 1-April-2025 and 31-March-2027.</span>';
+        document.getElementById('summaryTable').innerHTML = '';
+        return;
+      }
+
+      // Outbound leg
+      const outboundSeason = getSeason(outboundDate);
+      const destCode = extractCode(destination);
+      const isRegionalOut = isRegionalOrigin(origin);
+      const maxCostObjOut = getMaxCost(outboundSeason, destCode, isRegionalOut, outboundDate);
+      let maxCostOut = maxCostObjOut.main + (isRegionalOut ? maxCostObjOut.regional : 0);
+      let regionalSuppOut = isRegionalOut ? maxCostObjOut.regional : 0;
+
+      // Inbound leg (if not One-Way)
+      let maxCostIn = 0, regionalSuppIn = 0, isInbound = false, inboundSeason = '', maxCostObjIn;
+      let isRegionalIn = false;
+      if (returnOrigin !== "One-Way" && inboundDate) {
+        isInbound = true;
+        inboundSeason = getSeason(inboundDate);
+        const returnDestCode = extractCode(returnOrigin);
+        isRegionalIn = isRegionalOrigin(origin);
+        maxCostObjIn = getMaxCost(inboundSeason, returnDestCode, isRegionalIn, inboundDate);
+        maxCostIn = maxCostObjIn.main + (isRegionalIn ? maxCostObjIn.regional : 0);
+        regionalSuppIn = isRegionalIn ? maxCostObjIn.regional : 0;
+      }
+
+      // Total max cost (sum both legs if round trip)
+      let totalMaxCost = maxCostOut + (isInbound ? maxCostIn : 0);
+      let totalRegionalSupp = regionalSuppOut + (isInbound ? regionalSuppIn : 0);
+      let maxCostCurrency = 'GBP';
+
+      // Override with alternative max cost if provided and lower
+      let maxCostUsed = totalMaxCost;
+      let maxCostCurrencyUsed = maxCostCurrency;
+      if (altMaxCost && altMaxCost < totalMaxCost) {
+        maxCostUsed = altMaxCost;
+        maxCostCurrencyUsed = altMaxCostCurrency;
+      }
+
+      // Convert flight cost, max cost, regional/min supplements to PG Selling Currency
+      const seasonForExchange = outboundSeason;
+      const rateFlight = getExchangeRate(seasonForExchange, sabreCurrency, pgCurrency);
+      const rateMax = getExchangeRate(seasonForExchange, maxCostCurrencyUsed, pgCurrency);
+      const rateRegional = getExchangeRate(seasonForExchange, "GBP", pgCurrency);
+      const flightCostPG = flightCost * rateFlight;
+      const maxCostPG = maxCostUsed * rateMax;
+      const regionalSuppPG = totalRegionalSupp * rateRegional;
+      const minSuppPG = settings[flightClass].minSupp * rateRegional;
+      const markup = settings[flightClass].markup;
+
+      let supplement = 0;
+      let supplementReason = "";
+
+      if (flightCostPG <= maxCostPG) {
+        if (regionalSuppPG > 0) {
+          supplement = regionalSuppPG;
+          supplementReason = "Regional origin: supplement is the sum of regional supplements for both directions.";
+        } else {
+          supplement = 0;
+          supplementReason = "Main origin: no supplement.";
+        }
+      } else {
+        const calculated = (flightCostPG - maxCostPG) * markup;
+        if (regionalSuppPG > 0) {
+          supplement = calculated + regionalSuppPG;
+          supplementReason = "Regional origin: supplement is the greater of calculated or sum of regional supplements.";
+        } else {
+          supplement = Math.max(calculated, minSuppPG);
+          supplementReason = "Main origin: supplement is the greater of calculated or minimum supplement.";
+        }
+      }
+
+      supplement = Math.round(supplement / 10) * 10;
+
+      document.getElementById('result').innerHTML =
+        '<b>Total Supplement in ' + pgCurrency + ':</b> ' + supplement + '<br><i>' + supplementReason + '</i>';
+
+      // --- Summary Table ---
+      document.getElementById('summaryTable').innerHTML =
+        `<table class="summary-table">
+          <tr><th>Field</th><th>Value</th></tr>
+          <tr><td>Flight Class</td><td>${flightClass}</td></tr>
+          <tr><td>PG Selling Currency</td><td>${pgCurrency}</td></tr>
+          <tr><td>Origin</td><td>${origin}</td></tr>
+          <tr><td>Destination</td><td>${destination}</td></tr>
+          <tr><td>Travel Date (to Destination)</td><td>${outboundDate}</td></tr>
+          <tr><td>Return Origin</td><td>${returnOrigin}</td></tr>
+          <tr><td>Return Date (from Destination)</td><td>${inboundDate}</td></tr>
+          <tr><td>Sabre Cost Currency</td><td>${sabreCurrency}</td></tr>
+          <tr><td>Total Sabre Flight Cost</td><td>${flightCost}</td></tr>
+          <tr><td>Max Cost Outbound (Main+Regional)</td><td>${maxCostOut}</td></tr>
+          <tr><td>Max Cost Inbound (Main+Regional)</td><td>${isInbound ? maxCostIn : ''}</td></tr>
+          <tr><td>Regional Supplement Outbound</td><td>${regionalSuppOut}</td></tr>
+          <tr><td>Regional Supplement Inbound</td><td>${isInbound ? regionalSuppIn : ''}</td></tr>
+          <tr><td>Total Regional Supplement</td><td>${totalRegionalSupp}</td></tr>
+          <tr><td>Max Cost (used, sum)</td><td>${maxCostUsed}</td></tr>
+          <tr><td>Max Cost Currency</td><td>${maxCostCurrencyUsed}</td></tr>
+          <tr><td>Alternative Max Cost</td><td>${altMaxCost !== null ? altMaxCost : ''}</td></tr>
+          <tr><td>Alternative Max Cost Currency</td><td>${altMaxCostCurrency}</td></tr>
+          <tr><td>Markup</td><td>${markup}</td></tr>
+          <tr><td>Minimum Supplement</td><td>${settings[flightClass].minSupp}</td></tr>
+          <tr><td>Supplement (${pgCurrency})</td><td>${supplement}</td></tr>
+        </table>`;
+    }
+
+    // Helper functions for calculation (getSeason, getExchangeRate, getMaxCost, extractCode, isRegionalOrigin) should be defined here as in previous versions
+  </script>
+</body>
+</html>
